@@ -1,0 +1,6 @@
+nose
+mock
+sure
+ipdb
+rednose
+coverage
