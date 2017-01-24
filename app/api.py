@@ -6,6 +6,6 @@ import resources
 
 def create_api(app):
     api = Api(app)
-    api.add_resource(resources.Login, '/api/login')
-    api.add_resource(resources.User, '/api/me')
-    api.add_resource(resources.UserDebts, '/api/me/debts', '/api/me/debts/<int:debt_id>')
+    api.add_resource(resources.Login, '/login')
+    api.add_resource(resources.User, '/me')
+    api.add_resource(resources.UserDebts, '/me/debts', '/me/debts/<int:debt_id>')
