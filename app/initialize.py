@@ -1,10 +1,33 @@
 import os
 from datetime import timedelta
 
+from celery import Celery
+from celery.schedules import crontab
+
 from flask import Flask, request, g
 from flask.ext.sqlalchemy import SQLAlchemy
 
 from app import database
+
+wat_worker = Celery('watshodapay')
+wat_worker.conf.update(
+    CELERY_TASK_SERIALIZER='json',
+    CELERY_ACCEPT_CONTENT=['json'],
+    CELERY_RESULT_SERIALIZER='json',
+    CELERY_TIMEZONE='America/Sao_Paulo',
+    BROKER_URL=os.environ['REDIS_URL'],
+    CELERY_RESULT_BACKEND=os.environ['REDIS_URL'],
+    CELERYBEAT_SCHEDULE={
+        'check_expiring_debt': {
+            'task': 'wat_worker.check_expiring_debt',
+            'schedule': timedelta(hours=5)
+        },
+        'reset_payed_status': {
+            'task': 'wat_worker.reset_payed_status',
+            'schedule': crontab(minute=1, hour=0, day_of_month='1')
+        }
+    }
+)
 
 web_app = Flask(__name__)
 web_app.config.from_object(os.environ['APP_SETTINGS'])

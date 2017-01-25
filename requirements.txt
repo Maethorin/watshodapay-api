@@ -1,9 +1,16 @@
+celery
+redis
+
 Flask-RESTful
+
 Flask-SQLAlchemy
 psycopg2
+
 alembic
 Flask-Migrate
+
 passlib
 PyJWT
+
 gunicorn
 

@@ -176,6 +176,12 @@ class UserDebt(db.Model, ModelFactory, QueryMixin):
     payment_info = db.Column(db.String())
     is_payed = db.Column(db.Boolean(), nullable=False, default=False, server_default="false")
 
+    @classmethod
+    def clear_all_payed_status(cls):
+
+        db.session.bulk_update_mappings(UserDebt, {"is_payed": False})
+        db.session.commit()
+
     @property
     def status(self):
         if self.is_payed:
