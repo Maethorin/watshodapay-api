@@ -11,23 +11,18 @@ web_app.config.from_object(os.environ['APP_SETTINGS'])
 database.AppRepository.db = SQLAlchemy(web_app)
 
 
-DOMAIN = 'watshodapay-api.herokuapp.com'
-if web_app.config['DEVELOPMENT']:
-    DOMAIN = 'localhost:3100'
-
-
 @web_app.after_request
-def add_header(r):
-    r.headers['Cache-Control'] = "no-cache, no-store, must-revalidate"
-    r.headers['Pragma'] = 'no-cache'
-    r.headers['Expires'] = '0'
-    r.headers['Access-Control-Allow-Origin'] = 'http://{}'.format(DOMAIN)
-    r.headers['Access-Control-Allow-Credentials'] = 'true'
-    r.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Set-Cookie,XSRF-TOKEN'
-    r.headers['Access-Control-Expose-Headers'] = 'Content-Type,Authorization,Set-Cookie,XSRF-TOKEN'
-    r.headers['Access-Control-Allow-Methods'] = ','.join(['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS'])
-    r.headers['Access-Control-Max-Age'] = 21600
-    return r
+def add_header(req):
+    req.headers['Cache-Control'] = "no-cache, no-store, must-revalidate"
+    req.headers['Pragma'] = 'no-cache'
+    req.headers['Expires'] = '0'
+    req.headers['Access-Control-Allow-Origin'] = req.headers['Origin']
+    req.headers['Access-Control-Allow-Credentials'] = 'true'
+    req.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Set-Cookie,XSRF-TOKEN'
+    req.headers['Access-Control-Expose-Headers'] = 'Content-Type,Authorization,Set-Cookie,XSRF-TOKEN'
+    req.headers['Access-Control-Allow-Methods'] = ','.join(['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS'])
+    req.headers['Access-Control-Max-Age'] = 21600
+    return req
 
 
 @web_app.before_request
