@@ -105,27 +105,27 @@ class User(db.Model, ModelFactory, QueryMixin, AutenticMixin):
         return self.debts.filter(UserDebt.id == debt_id).first()
 
     @property
-    def expiration_date_filter(self):
-        return cast(UserDebt.expiration_date, Date)
+    def expiration_day_filter(self):
+        return UserDebt.expiration_day
 
     @property
     def tomorrow(self):
-        return date.today() + timedelta(days=1)
+        return date.today().day + 1
 
     def expired_debts(self):
-        return self.debts.filter(UserDebt.is_payed == False, self.expiration_date_filter < date.today())
+        return self.debts.filter(UserDebt.is_payed == False, self.expiration_day_filter < date.today().day)
 
     def opened_debts(self):
-        return self.debts.filter(UserDebt.is_payed == False, self.expiration_date_filter > self.tomorrow)
+        return self.debts.filter(UserDebt.is_payed == False, self.expiration_day_filter > self.tomorrow)
 
     def payed_debts(self):
         return self.debts.filter(UserDebt.is_payed == True)
 
     def today_debts(self):
-        return self.debts.filter(self.expiration_date_filter == date.today())
+        return self.debts.filter(self.expiration_day_filter == date.today().day)
 
     def tomorrow_debts(self):
-        return self.debts.filter(self.expiration_date_filter == self.tomorrow)
+        return self.debts.filter(self.expiration_day_filter == self.tomorrow)
 
     def debts_resume(self):
         return {
@@ -163,15 +163,16 @@ class User(db.Model, ModelFactory, QueryMixin, AutenticMixin):
 class UserDebt(db.Model, ModelFactory, QueryMixin):
     __tablename__ = 'users_debts'
     __mapper_args__ = {
-        "order_by": 'expiration_date'
+        "order_by": 'expiration_day'
     }
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'))
     user = relationship('User', back_populates='debts')
     description = db.Column(db.String(), nullable=False)
-    expiration_date = db.Column(db.Date(), nullable=False)
+    expiration_day = db.Column(db.Integer, nullable=False)
     value = db.Column(db.Numeric(scale=2, precision=7))
+    quantity = db.Column(db.Integer)
     payment_info = db.Column(db.String())
     is_payed = db.Column(db.Boolean(), nullable=False, default=False, server_default="false")
 
@@ -179,11 +180,11 @@ class UserDebt(db.Model, ModelFactory, QueryMixin):
     def status(self):
         if self.is_payed:
             return 'payed'
-        if self.expiration_date.strftime('%Y%m%d') < datetime.today().strftime('%Y%m%d'):
+        if self.expiration_day < datetime.today().day:
             return 'expired'
-        if self.expiration_date.strftime('%Y%m%d') == datetime.today().strftime('%Y%m%d'):
+        if self.expiration_day == datetime.today().day:
             return 'today'
-        if self.expiration_date.strftime('%Y%m%d') == (date.today() + timedelta(days=1)).strftime('%Y%m%d'):
+        if self.expiration_day == (date.today().day + 1):
             return 'tomorrow'
         return 'opened'
 
@@ -195,9 +196,11 @@ class UserDebt(db.Model, ModelFactory, QueryMixin):
         return {
             'id': self.id,
             'description': self.description,
-            'expiration_date': self.expiration_date.strftime('%d/%m/%Y'),
+            'expiration_day': self.expiration_day,
             'is_payed': self.is_payed,
             'value': value_formatted,
+            'quantity': self.quantity,
+            'is_recurrent': self.quantity is None,
             'payment_info': self.payment_info,
             'status': self.status
         }

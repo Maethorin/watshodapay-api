@@ -11,7 +11,7 @@ web_app.config.from_object(os.environ['APP_SETTINGS'])
 database.AppRepository.db = SQLAlchemy(web_app)
 
 
-DOMAIN = 'watshodapay.herokuapp.com'
+DOMAIN = 'watshodapay-api.herokuapp.com'
 if web_app.config['DEVELOPMENT']:
     DOMAIN = 'localhost:3100'
 
