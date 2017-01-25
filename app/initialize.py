@@ -16,7 +16,7 @@ def add_header(req):
     req.headers['Cache-Control'] = "no-cache, no-store, must-revalidate"
     req.headers['Pragma'] = 'no-cache'
     req.headers['Expires'] = '0'
-    req.headers['Access-Control-Allow-Origin'] = req.headers['Origin']
+    req.headers['Access-Control-Allow-Origin'] = 'http://localhost:3100'
     req.headers['Access-Control-Allow-Credentials'] = 'true'
     req.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Set-Cookie,XSRF-TOKEN'
     req.headers['Access-Control-Expose-Headers'] = 'Content-Type,Authorization,Set-Cookie,XSRF-TOKEN'
