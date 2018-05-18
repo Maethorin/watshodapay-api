@@ -1,166 +1,88 @@
 #  -*- coding: utf-8 -*-
 
-from datetime import datetime, date, timedelta
-from decimal import Decimal
-
-import jwt
-from sqlalchemy import exc, Date, cast
+from sqlalchemy import exc
 from sqlalchemy.orm import relationship
-from passlib.apps import custom_app_context
 
-from app import database, config as config_module
-
-config = config_module.get_config()
+from app import database
 
 db = database.AppRepository.db
 
 
-class ModelFactory(object):
+class AbstractModel(object):
+    class NotExist(Exception):
+        pass
+
+    class RepositoryError(Exception):
+        pass
+
     @classmethod
-    def create(cls, **attrs):
-        instance = cls(**attrs)
-        return instance
+    def create_from_json(cls, json_data):
+        try:
+            instance = cls()
+            instance.set_values(json_data)
+            instance.save_db()
+            return instance
+        except exc.IntegrityError as ex:
+            raise cls.RepositoryError(ex.message)
 
-    def save(self):
-        db.session.add(self)
-        db.session.commit()
-
-
-class QueryMixin(object):
     @classmethod
-    def get_list(cls, *args, **kwargs):
+    def list_with_filter(cls, **kwargs):
+        return cls.query.filter_by(**kwargs).all()
+
+    @classmethod
+    def list_all(cls):
         return cls.query.all()
 
     @classmethod
-    def get(cls, _id):
-        return cls.query.get(_id)
-
-
-class AutenticMixin(object):
-    def hash_password(self):
-        self.password = custom_app_context.encrypt(self.password)
-
-    def check_password(self, password):
-        return custom_app_context.verify(password, self.password)
-
-    def get_jwt_data(self):
-        return {}
-
-    def generate_auth_token(self, expiration=600):
-        jwt_data = self.get_jwt_data()
-        jwt_data['exp'] = datetime.utcnow() + timedelta(seconds=expiration)
-        return jwt.encode(jwt_data, config.SECRET_KEY, algorithm='HS256')
+    def get_with_filter(cls, **kwargs):
+        return cls.query.filter_by(**kwargs).one_or_none()
 
     @classmethod
-    def check_auth_token(cls, token):
+    def get(cls, item_id):
+        item = cls.query.get(item_id)
+        if not item:
+            raise cls.NotExist
+        else:
+            return item
+
+    def save_db(self):
+        db.session.add(self)
+        db.session.commit()
+
+    def delete_db(self):
         try:
-            data = jwt.decode(token, config.SECRET_KEY)
-        except:
-            return None
-        if not data['id']:
-            return None
-        user = cls.query.get(data['id'])
-        return user
+            db.session.delete(self)
+            db.session.commit()
+        except exc.IntegrityError as ex:
+            raise self.RepositoryError(ex.message)
 
-    @classmethod
-    def get_by_email(cls, email):
-        return cls.query.filter_by(email=email).first()
+    def update_from_json(self, json_data):
+        try:
+            self.set_values(json_data)
+            self.save_db()
+            return self
+        except exc.IntegrityError as ex:
+            raise self.RepositoryError(ex.message)
 
-    @property
-    def is_admin(self):
-        return False
+    def set_values(self, json_data):
+        for key, value in json_data.iteritems():
+            setattr(self, key, json_data.get(key, getattr(self, key)))
 
 
-class User(db.Model, ModelFactory, QueryMixin, AutenticMixin):
+class User(db.Model, AbstractModel):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(), nullable=False, unique=True)
     password = db.Column(db.String(128), nullable=False)
     name = db.Column(db.String(), nullable=False)
-    debts = relationship('UserDebt', lazy='dynamic', back_populates='user', passive_deletes=True)
+    debts = relationship('UserDebt', lazy='dynamic', order_by='UserDebt.expiration_day', back_populates='user', passive_deletes=True)
+    payments = relationship('UserPayment', lazy='dynamic', order_by='-UserPayment.year,UserPayment.month', back_populates='user', passive_deletes=True)
 
-    @classmethod
-    def create_user(cls, user_data):
-        user = None
-        try:
-            user = cls.create(**user_data)
-            user.hash_password()
-            user.save()
-        except exc.IntegrityError as ex:
-            if 'email' in str(ex):
-                raise UserAlreadyExist(u'Email já está cadastrado como atleta.')
-        return user
-
-    @classmethod
-    def update_user(cls, user_id, user_data):
-        user = cls.get(user_id)
-        try:
-            user = cls.create(**user_data)
-        except exc.IntegrityError as ex:
-            if 'email' in str(ex):
-                raise UserAlreadyExist(u'Email já está cadastrado como atleta.')
-        return user
-
-    def get_debt(self, debt_id):
-        return self.debts.filter(UserDebt.id == debt_id).first()
-
-    @property
-    def expiration_day_filter(self):
-        return UserDebt.expiration_day
-
-    @property
-    def tomorrow(self):
-        return date.today().day + 1
-
-    def expired_debts(self):
-        return self.debts.filter(UserDebt.is_payed == False, self.expiration_day_filter < date.today().day)
-
-    def opened_debts(self):
-        return self.debts.filter(UserDebt.is_payed == False, self.expiration_day_filter > self.tomorrow)
-
-    def payed_debts(self):
-        return self.debts.filter(UserDebt.is_payed == True)
-
-    def today_debts(self):
-        return self.debts.filter(self.expiration_day_filter == date.today().day)
-
-    def tomorrow_debts(self):
-        return self.debts.filter(self.expiration_day_filter == self.tomorrow)
-
-    def debts_resume(self):
-        return {
-            'all': [debt.to_dict() for debt in self.debts],
-            'expired': [debt.to_dict() for debt in self.expired_debts()],
-            'opened': [debt.to_dict() for debt in self.opened_debts()],
-            'payed': [debt.to_dict() for debt in self.payed_debts()],
-            'today': [debt.to_dict() for debt in self.today_debts()],
-            'tomorrow': [debt.to_dict() for debt in self.tomorrow_debts()]
-        }
-
-    def get_jwt_data(self):
-        return {
-            'id': self.id,
-            'email': self.email,
-            'name': self.name,
-            'has_expired_debts': self.expired_debts().count() > 0,
-            'has_expiring_debts': self.today_debts().count() > 0
-        }
-
-    def add_debt(self, debt_data):
-        value = debt_data.get('value', None)
-        if value is not None:
-            value = Decimal(value)
-            debt_data['value'] = value
-        debt = UserDebt.create(**debt_data)
-        self.debts.append(debt)
-        self.save()
-        return debt
-
-    def to_dict(self):
-        return self.get_jwt_data()
+    def filter_payments(self, year, month):
+        return self.payments.filter_by(year=year, month=month)
 
 
-class UserDebt(db.Model, ModelFactory, QueryMixin):
+class UserDebt(db.Model, AbstractModel):
     __tablename__ = 'users_debts'
     __mapper_args__ = {
         "order_by": 'expiration_day'
@@ -173,43 +95,24 @@ class UserDebt(db.Model, ModelFactory, QueryMixin):
     expiration_day = db.Column(db.Integer, nullable=False)
     value = db.Column(db.Numeric(scale=2, precision=7))
     quantity = db.Column(db.Integer)
-    payment_info = db.Column(db.String())
+    payments = relationship('UserPayment', lazy='dynamic', order_by='UserPayment.year,UserPayment.month', back_populates='user_debt')
+
+
+class UserPayment(db.Model, AbstractModel):
+    __tablename__ = 'users_payments'
+    __mapper_args__ = {
+        "order_by": '-year,-month'
+    }
+
+    id = db.Column(db.Integer, primary_key=True)
+    year = db.Column(db.Integer)
+    month = db.Column(db.Integer)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'))
+    user = relationship('User', back_populates='payments')
+    user_debt_id = db.Column(db.Integer, db.ForeignKey('users_debts.id'))
+    user_debt = relationship('UserDebt', back_populates='payments')
     is_payed = db.Column(db.Boolean(), nullable=False, default=False, server_default="false")
-
-    @classmethod
-    def clear_all_payed_status(cls):
-
-        db.session.bulk_update_mappings(UserDebt, {"is_payed": False})
-        db.session.commit()
-
-    @property
-    def status(self):
-        if self.is_payed:
-            return 'payed'
-        if self.expiration_day < datetime.today().day:
-            return 'expired'
-        if self.expiration_day == datetime.today().day:
-            return 'today'
-        if self.expiration_day == (date.today().day + 1):
-            return 'tomorrow'
-        return 'opened'
-
-    def to_dict(self):
-        value_formatted = 'NINFO'
-        if self.value is not None:
-            value_formatted = float(self.value)
-
-        return {
-            'id': self.id,
-            'description': self.description,
-            'expiration_day': self.expiration_day,
-            'is_payed': self.is_payed,
-            'value': value_formatted,
-            'quantity': self.quantity,
-            'is_recurrent': self.quantity is None,
-            'payment_info': self.payment_info,
-            'status': self.status
-        }
+    payment_info = db.Column(db.String())
 
 
 class UserAlreadyExist(Exception):

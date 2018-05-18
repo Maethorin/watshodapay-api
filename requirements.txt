@@ -1,16 +1,12 @@
+Flask-RESTful==0.3.6
+Flask-SQLAlchemy==2.3.1
+Flask-Migrate==2.0.3
+alembic==0.9.1
+
 celery
 redis
-
-Flask-RESTful
-
-Flask-SQLAlchemy
 psycopg2
-
-alembic
-Flask-Migrate
-
 passlib
 PyJWT
-
 gunicorn
 

@@ -5,7 +5,7 @@ from celery import Celery
 from celery.schedules import crontab
 
 from flask import Flask, request, g
-from flask.ext.sqlalchemy import SQLAlchemy
+from flask_sqlalchemy import SQLAlchemy
 
 from app import database
 
