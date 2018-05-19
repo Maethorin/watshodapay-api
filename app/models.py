@@ -78,8 +78,18 @@ class User(db.Model, AbstractModel):
     debts = relationship('UserDebt', lazy='dynamic', order_by='UserDebt.expiration_day', back_populates='user', passive_deletes=True)
     payments = relationship('UserPayment', lazy='dynamic', order_by='-UserPayment.year,UserPayment.month', back_populates='user', passive_deletes=True)
 
+    @classmethod
+    def get_by_email(cls, email):
+        return cls.get_with_filter(email=email)
+
     def filter_payments(self, year, month):
         return self.payments.filter_by(year=year, month=month)
+
+    def get_debt(self, debt_id):
+        return self.debts.get(debt_id)
+
+    def get_payment(self, payment_id):
+        return self.payments.get(payment_id)
 
 
 class UserDebt(db.Model, AbstractModel):

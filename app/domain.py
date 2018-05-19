@@ -1,19 +1,24 @@
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from decimal import Decimal
 
+import jwt
 from passlib.apps import custom_app_context
 
-from app import models
+from app import config as config_module, models
+
+config = config_module.get_config()
+
+
+class NotExist(Exception):
+    pass
+
+
+class AlreadyExist(Exception):
+    pass
 
 
 class Entity(object):
     repository = None
-
-    class AlreadyExist(Exception):
-        pass
-
-    class NotExist(Exception):
-        pass
 
     @classmethod
     def list_all(cls):
@@ -25,7 +30,7 @@ class Entity(object):
             return cls(cls.repository.create_from_json(json_data))
         except cls.repository.RepositoryError as ex:
             if 'already exists' in ex.message.lower:
-                raise cls.AlreadyExist('Entity with {} already exists in repository'.format(json_data))
+                raise AlreadyExist('Entity with {} already exists in repository'.format(json_data))
 
     @classmethod
     def create_with_id(cls, entity_id):
@@ -35,7 +40,7 @@ class Entity(object):
     @classmethod
     def create_with_instance(cls, instance):
         if instance is None:
-            raise cls.NotExist('Tryed to create entity with instance None. Check the stack trace to see the origin')
+            raise NotExist('Tryed to create entity with instance None. Check the stack trace to see the origin')
         return cls(instance)
 
     def __init__(self, instance):
@@ -65,9 +70,6 @@ class ValueObject(object):
     class AlreadyExist(Exception):
         pass
 
-    class NotExist(Exception):
-        pass
-
     @classmethod
     def list_all(cls, parent_instance_list):
         return [cls.create_with_instance(instance) for instance in parent_instance_list]
@@ -83,7 +85,7 @@ class ValueObject(object):
     @classmethod
     def create_with_instance(cls, instance):
         if instance is None:
-            raise cls.NotExist('Tryed to create entity with instance None. Check the stack trace to see the origin')
+            raise NotExist('Tryed to create entity with instance None. Check the stack trace to see the origin')
         return cls(instance)
 
     def __init__(self, instance):
@@ -206,10 +208,44 @@ class User(Entity):
         json_data['password'] = custom_app_context.encrypt(json_data['password'])
         super(User, cls).create_new(json_data)
 
+    @classmethod
+    def create_with_token(cls, token):
+        try:
+            data = jwt.decode(token, config.SECRET_KEY)
+        except Exception as ex:
+            return None
+        if not data.get('id', None):
+            return None
+        return cls.create_with_id(data['id'])
+
+    @classmethod
+    def create_with_logged(cls, logged_user):
+        return cls.create_with_email(logged_user['email'])
+
+    @classmethod
+    def create_for_login(cls, login_data):
+        user = cls.create_with_email(login_data['username'])
+        user.temp_password = login_data['password']
+        return user
+
+    @classmethod
+    def create_with_email(cls, email):
+        instance = cls.repository.get_by_email(email)
+        return cls.create_with_instance(instance)
+
     def __init__(self, instance):
         super(User, self).__init__(instance)
+        self.temp_password = None
         self.__debts = None
         self.__current_payments = None
+
+    @property
+    def password_hash(self):
+        return self.instance.password
+
+    @property
+    def is_correct(self):
+        return custom_app_context.verify(self.temp_password, self.password_hash)
 
     @property
     def name(self):
@@ -232,6 +268,12 @@ class User(Entity):
             self.__debts = UserDebt.list_all(self.instance.debts)
         return self.__debts
 
+    def get_debt(self, debt_id):
+        return UserDebt.create_with_instance(self.instance.get_debt(debt_id))
+
+    def get_payment(self, payment_id):
+        return UserPayment.create_with_instance(self.instance.get_payment(payment_id))
+
     def create_a_deb(self, debt_data):
         debt_data['user_id'] = self.id
         debt_data['value'] = Decimal(debt_data.get('value', 0.0))
@@ -239,18 +281,41 @@ class User(Entity):
         self.__debts = None
         return debt
 
+    def create_payment(self, payment_data):
+        if payment_data.get('single'):
+            self.remove_unused_json_data_key('single', payment_data)
+            return self.create_a_single_payment(payment_data)
+        today = date.today()
+        year = payment_data.get('year', today.year)
+        month = payment_data.get('month', today.month)
+        self.create_month_payments(year, month)
+
+    def create_a_single_payment(self, payment_data, debt=None):
+        if debt is None:
+            debt_data = payment_data.pop('debt')
+            debt = self.create_a_deb(debt_data)
+        payment_data.update({
+            'user_id': self.id,
+            'user_debt_id': debt.id
+        })
+        payment = UserPayment.create_new(payment_data)
+        self.__current_payments = None
+        return payment
+
     def create_month_payments(self, year, month):
         for debt in self.debts:
             if debt.is_active or debt.is_recurrent:
-                payment_data = {
-                    'user_id': self.id,
-                    'user_debt_id': debt.id,
-                    'year': year,
-                    'month': month
-                }
-                UserPayment.create_new(payment_data)
                 if debt.is_active:
+                    self.create_a_single_payment({'year': year, 'month': month})
                     debt.decrease_quantity()
+
+    def update_debt(self, debt_id, debt_data):
+        debt = self.get_debt(debt_id)
+        return debt.update_me(debt_data)
+
+    def update_payment(self, payment_id, payment_data):
+        payment = self.get_payment(payment_id)
+        return payment.update_me(payment_data)
 
     def list_payments_for(self, year, month):
         return UserPayment.list_all(self.instance.filter_payments(year, month))
@@ -261,3 +326,10 @@ class User(Entity):
             'email': self.email,
             'name': self.name,
         }
+
+    def generate_auth_token(self, expiration=600):
+        token_data = self.get_jwt_data()
+        token_data.update({
+            'exp': datetime.utcnow() + timedelta(minutes=expiration)
+        })
+        return jwt.encode(token_data, config.SECRET_KEY, algorithm='HS256')

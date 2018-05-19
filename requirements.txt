@@ -9,4 +9,6 @@ psycopg2
 passlib
 PyJWT
 gunicorn
+elastic-apm[flask]
+
 

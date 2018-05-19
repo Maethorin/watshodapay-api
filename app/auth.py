@@ -1,29 +1,12 @@
-import os
-from functools import wraps
-
-from flask import request, make_response
+# -*- coding: utf-8 -*-
 
 
-def extract_auth_key(headers):
+def check_auth_token(token):
+    from app import domain
     try:
-        authorization = headers["AUTHORIZATION"]
-    except KeyError:
-        return None
-    if not authorization:
-        return None
-    authorization = authorization.split()
-    if len(authorization) != 2:
-        return None
-    if 'AUTH-KEY' in authorization:
-        return authorization[1]
+        user = domain.User.create_with_token(token)
+        new_token = user.generate_auth_token()
+    except Exception as ex:
+        return None, None, None
+    return user.as_dict(compact=True), new_token, user
 
-
-def secured(function):
-    @wraps(function)
-    def decorated(*args, **kwargs):
-        auth_key = extract_auth_key(request.headers)
-        if not auth_key or auth_key != os.environ['AUTH_KEY']:
-            headers = {'Content-Type': 'text/json; charset=utf-8'}
-            return make_response('{"error": "NOT AUTHORIZED"}', 401, headers)
-        return function(*args, **kwargs)
-    return decorated
