@@ -320,7 +320,7 @@ class User(Entity):
     def list_payments_for(self, year, month):
         return UserPayment.list_all(self.instance.filter_payments(year, month))
 
-    def get_jwt_data(self):
+    def as_dict(self, compact=False):
         return {
             'id': self.id,
             'email': self.email,
@@ -328,7 +328,7 @@ class User(Entity):
         }
 
     def generate_auth_token(self, expiration=600):
-        token_data = self.get_jwt_data()
+        token_data = self.as_dict()
         token_data.update({
             'exp': datetime.utcnow() + timedelta(minutes=expiration)
         })

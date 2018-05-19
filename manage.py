@@ -5,14 +5,14 @@ from flask_script import Manager
 from flask_migrate import Migrate, MigrateCommand
 import sys
 
-from app import http_app
+from app import initialize
+from app.models import *
 
-manager = Manager(http_app.web_app)
+manager = Manager(initialize.web_app)
 
 
 def register_migrate(manager):
-    from app import models
-    migrate = Migrate(http_app.web_app, models.db)
+    migrate = Migrate(initialize.web_app, db)
     manager.add_command('db', MigrateCommand)
     return migrate
 

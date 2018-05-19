@@ -10,5 +10,5 @@ passlib
 PyJWT
 gunicorn
 elastic-apm[flask]
-
+python-dotenv
 

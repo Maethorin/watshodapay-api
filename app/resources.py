@@ -132,7 +132,7 @@ class LoginResource(ResourceBase):
                 g.user_entity = user
                 g.current_token = user.generate_auth_token()
                 return {'logged': True}, 200
-        except Exception:
+        except Exception as ex:
             apm.monitor.capture_exception(exc_info=True)
             return {'result': 'Not Authorized'}, 401
         return {'result': 'Not Authorized'}, 401
@@ -178,10 +178,10 @@ class MeResource(ResourceBase):
             return self.return_unexpected_error(ex)
 
 
-class UserDebts(ResourceBase):
+class UserDebtsResource(ResourceBase):
     @login_required
     def get(self, debt_id=None):
-        super(UserDebts, self).get()
+        super(UserDebtsResource, self).get()
         if debt_id is None:
             return [self.response(debt.as_dict()) for debt in self.me.debts]
         try:
@@ -193,7 +193,7 @@ class UserDebts(ResourceBase):
 
     @login_required
     def put(self, debt_id):
-        super(UserDebts, self).put()
+        super(UserDebtsResource, self).put()
         try:
             return self.response(self.me.update_debt(debt_id, self.payload).as_dict())
         except domain.NotExist:
@@ -208,7 +208,7 @@ class UserDebts(ResourceBase):
 
     @login_required
     def post(self):
-        super(UserDebts, self).post()
+        super(UserDebtsResource, self).post()
         try:
             debt = self.me.create_a_deb(self.payload)
             return self.response(debt.to_dict())
@@ -220,10 +220,10 @@ class UserDebts(ResourceBase):
             return self.return_unexpected_error(ex)
 
 
-class UserPayments(ResourceBase):
+class UserPaymentsResource(ResourceBase):
     @login_required
     def get(self, payment_id=None):
-        super(UserPayments, self).get()
+        super(UserPaymentsResource, self).get()
         if payment_id is None:
             return [self.response(payment.as_dict()) for payment in self.me.payment]
         try:
@@ -235,7 +235,7 @@ class UserPayments(ResourceBase):
 
     @login_required
     def put(self, payment_id):
-        super(UserPayments, self).put()
+        super(UserPaymentsResource, self).put()
         try:
             return self.response(self.me.update_payment(payment_id, self.payload).as_dict())
         except domain.NotExist:
@@ -250,7 +250,7 @@ class UserPayments(ResourceBase):
 
     @login_required
     def post(self):
-        super(UserPayments, self).post()
+        super(UserPaymentsResource, self).post()
         try:
             payment = self.me.create_payment(self.payload)
             return self.response(payment.to_dict())
