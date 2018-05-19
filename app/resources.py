@@ -71,12 +71,6 @@ class ResourceBase(Resource):
         return payload
 
     @property
-    def cookies(self):
-        username = request.cookies.get('watshodapayUserName', None)
-        token = request.cookies.get('watshodapayUserToken', 'null')
-        return {'watshodapayUserName': username, 'watshodapayUserToken': token}
-
-    @property
     def headers(self):
         return request.headers
 
@@ -211,7 +205,7 @@ class UserDebtsResource(ResourceBase):
         super(UserDebtsResource, self).post()
         try:
             debt = self.me.create_a_deb(self.payload)
-            return self.response(debt.to_dict())
+            return self.response(debt.as_dict())
         except KeyError as ex:
             apm.monitor.capture_exception(exc_info=True)
             return self.return_bad_request(ex)
@@ -225,7 +219,7 @@ class UserPaymentsResource(ResourceBase):
     def get(self, payment_id=None):
         super(UserPaymentsResource, self).get()
         if payment_id is None:
-            return [self.response(payment.as_dict()) for payment in self.me.payment]
+            return [self.response(payment.as_dict()) for payment in self.me.current_payments]
         try:
             payment = self.me.get_payment(payment_id)
             return self.response(payment.as_dict())
@@ -253,7 +247,9 @@ class UserPaymentsResource(ResourceBase):
         super(UserPaymentsResource, self).post()
         try:
             payment = self.me.create_payment(self.payload)
-            return self.response(payment.to_dict())
+            if payment is not None:
+                return self.response(payment.as_dict())
+            return self.response({'status': 'OK', 'message': 'payment list created'})
         except KeyError as ex:
             apm.monitor.capture_exception(exc_info=True)
             return self.return_bad_request(ex)

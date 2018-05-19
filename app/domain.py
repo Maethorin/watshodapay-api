@@ -1,3 +1,4 @@
+import operator
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 
@@ -137,7 +138,7 @@ class UserDebt(ValueObject):
         return self.quantity > 0
 
     def decrease_quantity(self):
-        self.update_me({'quantity', self.quantity - 1})
+        self.update_me({'quantity': self.quantity - 1})
 
     def as_dict(self, compact=False):
         value_formatted = 'NINFO'
@@ -170,6 +171,10 @@ class UserPayment(ValueObject):
         return self.instance.month
 
     @property
+    def value(self):
+        return self.instance.value
+
+    @property
     def is_payed(self):
         return self.instance.is_payed
 
@@ -191,10 +196,19 @@ class UserPayment(ValueObject):
             self.__debt = UserDebt.create_with_instance(self.instance.user_debt)
         return self.__debt
 
+    @property
+    def date(self):
+        return '{}-{}-{}'.format(self.year, str(self.month).zfill(2), str(self.debt.expiration_day).zfill(2))
+
     def as_dict(self, compact=False):
+        value_formatted = 'NINFO'
+        if self.value is not None:
+            value_formatted = float(self.value)
+
         return {
             'id': self.id,
-            'date': '{}-{}-{}'.format(self.year, self.month, self.debt.expiration_day),
+            'date': self.date,
+            'value': value_formatted,
             'status': self.status,
             'debt': self.debt.as_dict()
         }
@@ -260,6 +274,7 @@ class User(Entity):
         if self.__current_payments is None:
             today = date.today()
             self.__current_payments = UserPayment.list_all(self.instance.filter_payments(today.year, today.month))
+            self.__current_payments.sort(key=operator.attrgetter("date"))
         return self.__current_payments
 
     @property
@@ -294,9 +309,12 @@ class User(Entity):
         if debt is None:
             debt_data = payment_data.pop('debt')
             debt = self.create_a_deb(debt_data)
+        value = payment_data.get('value', debt.value or 0.0)
+        self.remove_unused_json_data_key('is_recurrent', payment_data)
         payment_data.update({
             'user_id': self.id,
-            'user_debt_id': debt.id
+            'user_debt_id': debt.id,
+            'value': Decimal(value)
         })
         payment = UserPayment.create_new(payment_data)
         self.__current_payments = None
@@ -305,8 +323,9 @@ class User(Entity):
     def create_month_payments(self, year, month):
         for debt in self.debts:
             if debt.is_active or debt.is_recurrent:
+                if self.payment_not_registerd_yet(debt.id, year, month):
+                    self.create_a_single_payment({'year': year, 'month': month}, debt)
                 if debt.is_active:
-                    self.create_a_single_payment({'year': year, 'month': month})
                     debt.decrease_quantity()
 
     def update_debt(self, debt_id, debt_data):
@@ -333,3 +352,6 @@ class User(Entity):
             'exp': datetime.utcnow() + timedelta(minutes=expiration)
         })
         return jwt.encode(token_data, config.SECRET_KEY, algorithm='HS256')
+
+    def payment_not_registerd_yet(self, debt_id, year, month):
+        return not self.instance.payment_exists(debt_id, year, month)

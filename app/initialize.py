@@ -20,13 +20,12 @@ api.create_api(web_app)
 
 @web_app.before_request
 def before_request():
-    token = request.cookies.get('watshodapayUserToken', None)
-    username = request.cookies.get('watshodapayUserName')
+    token = request.headers.get('XSRF-TOKEN', None)
     authenticated = None
     user = None
     user_entity = None
     new_token = None
-    if token and username:
+    if token:
         user, new_token, user_entity = auth.check_auth_token(token)
     if user and new_token:
         g.user = user
@@ -45,16 +44,25 @@ def add_cache_header(response):
 
 
 @web_app.after_request
+def add_access_control_header(response):
+    """
+    Add response headers for CORS
+    """
+    response.headers['Access-Control-Allow-Origin'] = "http://localhost:3100"
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Set-Cookie,XSRF-TOKEN'
+    response.headers['Access-Control-Expose-Headers'] = 'Content-Type,Authorization,Set-Cookie,XSRF-TOKEN'
+    response.headers['Access-Control-Allow-Methods'] = ','.join(['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS'])
+    response.headers['Access-Control-Max-Age'] = 21600
+    return response
+
+
+@web_app.after_request
 def add_token_header(response):
     user = g.get("user")
     if user is not None:
         token = g.current_token
-        import datetime
-        expire_date = datetime.datetime.now()
-        expire_date = expire_date + datetime.timedelta(days=90)
-        response.set_cookie('watshodapayUserToken', token, domain='watshodapay.com.br', expires=expire_date)
-        response.set_cookie('watshodapayUserName', g.user['email'], domain='watshodapay.com.br', expires=expire_date)
-
+        response.headers['XSRF-TOKEN'] = token
     return response
 
 

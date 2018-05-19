@@ -85,6 +85,9 @@ class User(db.Model, AbstractModel):
     def filter_payments(self, year, month):
         return self.payments.filter_by(year=year, month=month)
 
+    def payment_exists(self, debt_id, year, month):
+        return self.payments.filter_by(user_debt_id=debt_id, year=year, month=month).count() > 0
+
     def get_debt(self, debt_id):
         return self.debts.get(debt_id)
 
@@ -117,10 +120,11 @@ class UserPayment(db.Model, AbstractModel):
     id = db.Column(db.Integer, primary_key=True)
     year = db.Column(db.Integer)
     month = db.Column(db.Integer)
+    value = db.Column(db.Numeric(scale=2, precision=7))
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'))
     user = relationship('User', back_populates='payments')
     user_debt_id = db.Column(db.Integer, db.ForeignKey('users_debts.id'))
-    user_debt = relationship('UserDebt', back_populates='payments')
+    user_debt = relationship('UserDebt', lazy='joined', back_populates='payments')
     is_payed = db.Column(db.Boolean(), nullable=False, default=False, server_default="false")
     payment_info = db.Column(db.String())
 
