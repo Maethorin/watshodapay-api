@@ -89,10 +89,10 @@ class User(db.Model, AbstractModel):
         return self.payments.filter_by(user_debt_id=debt_id, year=year, month=month).count() > 0
 
     def get_debt(self, debt_id):
-        return self.debts.get(debt_id)
+        return self.debts.filter_by(debt_id).first()
 
     def get_payment(self, payment_id):
-        return self.payments.get(payment_id)
+        return self.payments.filter_by(id=payment_id).first()
 
 
 class UserDebt(db.Model, AbstractModel):

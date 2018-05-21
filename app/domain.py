@@ -179,6 +179,10 @@ class UserPayment(ValueObject):
         return self.instance.is_payed
 
     @property
+    def payment_info(self):
+        return self.instance.payment_info
+
+    @property
     def status(self):
         if self.is_payed:
             return 'payed'
@@ -210,6 +214,8 @@ class UserPayment(ValueObject):
             'date': self.date,
             'value': value_formatted,
             'status': self.status,
+            'is_payed': self.is_payed,
+            'payment_info': self.payment_info,
             'debt': self.debt.as_dict()
         }
 
@@ -330,11 +336,13 @@ class User(Entity):
 
     def update_debt(self, debt_id, debt_data):
         debt = self.get_debt(debt_id)
-        return debt.update_me(debt_data)
+        debt.update_me(debt_data)
+        return debt
 
     def update_payment(self, payment_id, payment_data):
         payment = self.get_payment(payment_id)
-        return payment.update_me(payment_data)
+        payment.update_me(payment_data)
+        return payment
 
     def list_payments_for(self, year, month):
         return UserPayment.list_all(self.instance.filter_payments(year, month))
